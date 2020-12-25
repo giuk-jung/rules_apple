@@ -278,6 +278,42 @@ def _apple_static_framework_import_impl(ctx):
     providers = []
 
     framework_imports = ctx.files.framework_imports
+    xcframework_paths = ctx.attr.xcframework_paths
+    if xcframework_paths:
+        found_platform = False
+        current_platform = ctx.fragments.apple.single_arch_platform
+        for platform in xcframework_paths:
+            if str(current_platform) == platform:
+                found_platform = True
+
+                path_for_framework = xcframework_paths[platform]
+                if not path_for_framework.endswith((".framework", ".framework/")):
+                    fail("""
+ERROR: Instructed to work with xcframework but the given path `{}` doesn't end with `.framework`
+""".format(path_for_framework)
+                    )
+                found_framework_path = False
+                framework_imports_for_platform = []
+                for f in framework_imports:
+                    if path_for_framework in f.short_path:
+                        found_framework_path = True
+                        framework_imports_for_platform.append(f)
+                if not found_framework_path:
+                    fail("""
+ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
+""".format(xcframework_paths[platform])
+                    )
+                framework_imports = framework_imports_for_platform
+
+                continue
+        if not found_platform:
+            fail("""
+ERROR: Instructed to work with xcframework but couldn't find framework path for platform `{}`
+""".format(str(current_platform))
+            )
+# // TODO: [chao] support dynamic library, test with AMPKit
+# // TODO: [chao] should deprecate the original import_xcframework?
+
     _, header_imports, module_map_imports = _classify_framework_imports(ctx, framework_imports)
 
     transitive_sets = _transitive_framework_imports(ctx.attr.deps)
@@ -386,6 +422,15 @@ apple_static_framework_import = rule(
             doc = """
 The list of files under a .framework directory which are provided to Apple based targets that depend
 on this target.
+""",
+        ),
+        "xcframework_paths": attr.string_dict(
+            doc = """
+The framework file path information for each platform. Key: platform (possible values: IOS_DEVICE,
+IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
+Value: relative path to the framework file. This is needed since we cannot read 
+*.xcframework/Info.plist during the analyzing phase. Also, this is based on the assumption that
+a framework file should be a fat binary containing all architecture for a specific platform.
 """,
         ),
         "sdk_dylibs": attr.string_list(
