@@ -239,7 +239,48 @@ def _framework_import_list(ctx):
     # but there is no timeline. We need to track the following issue.
     # https://github.com/bazelbuild/rules_apple/issues/851
     
+    """
+    리뷰 대응
+    Instead of the the full path, can we use the framework identifier (LibraryIdentifier in the Info.plist)?
+    I think it's safe to assume that the framework name will follow the conventional name 
+    FrameworkName.framework if we have a FrameworkName.xcframework.
+    """
+    
+    
     framework_imports = ctx.files.framework_imports
+    # 구현
+    # 
+    # 1. XCFramework 인지 그냥 framework인지 확인
+    # 
+    # 만약 ctx.files.framework_imports 에 info.plist가 있는지?
+    # info_plist = for f in framework_imports:
+    
+    # info_plist = [
+    #     file for file in framework_imports
+    #     if file.basename.lower() == "info.plist"
+    # ]
+    info_plist = ctx.label.name + ".xcframework/Info.plist"
+    print("\n{info_plist}\n".format(
+        info_plist = info_plist,
+    ))
+
+    
+        
+    # icon_files = [f for f in asset_files if ".stickersiconset/" in f.path]
+    #   없으면 에러출력, 종료.
+    #   있으면 info.plist의 값을 가져옴
+    #
+    #   가져온 info.plist 의 값에서 패키지 타입(키 CFBundlePackageType의 값) 찾기
+    #   만약 패키지타입이 "XFWK" 이면,
+    #       xcframework_paths에 AvailableLibraries[LibraryIdentifier] : AvailableLibraries[LibraryPath] 형식의 배열 대입
+    # AvailableLibraries[LibraryIdentifier]
+    
+    #return framework_imports
+    
+    
+    
+    
+    
     xcframework_paths = ctx.attr.xcframework_paths
     if xcframework_paths:
         found_platform = False
