@@ -248,66 +248,56 @@ def _framework_import_list(ctx):
     
     
     framework_imports = ctx.files.framework_imports
-    # 구현
-    # 
-    # 1. XCFramework 인지 그냥 framework인지 확인
-    # 
-    # 만약 ctx.files.framework_imports 에 info.plist가 있는지?
-    # info_plist = for f in framework_imports:
     
-    # info_plist = [
-    #     file for file in framework_imports
-    #     if file.basename.lower() == "info.plist"
-    # ]
-    info_plist = ctx.label.name + ".xcframework/Info.plist"
-    print("\n{info_plist}\n".format(
-        info_plist = info_plist,
-    ))
-
-    
+    # xcframework_paths = ctx.attr.xcframework_paths
+    library_ids = ctx.attr.xcframework_library_ids # eg."IOS_SIMULATOR": "ios-x86_64-simulator",
+    # if xcframework_paths:
+    if library_ids:
+        # xcframework_name = paths.basename(framework_imports[0].dirname)
+        # framework_name = paths.replace_extension(xcframework_name, "framework")
+        xcframework_basename = paths.split_extension( # eg. "AMPKit"
+            paths.basename(framework_imports[0].dirname)
+        )[0]
+        framework_name = xcframework_basename + ".framework" # eg. "AMPKit.framework"
+        # found_platform = False
+        current_platform = ctx.fragments.apple.single_arch_platform # eg. IOS_SIMULATOR
+    # xcframework_paths = ctx.attr.xcframework_paths
         
-    # icon_files = [f for f in asset_files if ".stickersiconset/" in f.path]
-    #   없으면 에러출력, 종료.
-    #   있으면 info.plist의 값을 가져옴
-    #
-    #   가져온 info.plist 의 값에서 패키지 타입(키 CFBundlePackageType의 값) 찾기
-    #   만약 패키지타입이 "XFWK" 이면,
-    #       xcframework_paths에 AvailableLibraries[LibraryIdentifier] : AvailableLibraries[LibraryPath] 형식의 배열 대입
-    # AvailableLibraries[LibraryIdentifier]
-    
-    #return framework_imports
-    
-    
-    
-    
-    
-    xcframework_paths = ctx.attr.xcframework_paths
-    if xcframework_paths:
-        found_platform = False
-        current_platform = ctx.fragments.apple.single_arch_platform
-        for platform in xcframework_paths:
+        print("\n{framework_name}\n".format(
+            framework_name = framework_name
+        ))
+        
+        for platform in library_ids:
             if str(current_platform) == platform:
-                found_platform = True
-
-                path_for_framework = xcframework_paths[platform]
-                if not path_for_framework.endswith((".framework", ".framework/")):
-                    fail("""
-ERROR: Instructed to work with xcframework but the given path `{}` doesn't end with `.framework`
-""".format(path_for_framework)
-                    )
-                found_framework_path = False
+                # found_platform = True
+                path_for_framework = library_ids[platform] + "/" + framework_name
+                # if not found_framework_path:
+                path = ctx.path(path_for_framework)
+                print("\n{path}\n".format(
+                    path = path
+                ))
+            if not path.exists
+                fail("""
+ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
+""".format(xcframework_paths[platform])
+                )
+#                 if not path_for_framework.endswith((".framework", ".framework/")):
+#                     fail("""
+# ERROR: Instructed to work with xcframework but the given path `{}` doesn't end with `.framework`
+# """.format(path_for_framework)
+                    # )
+                # found_framework_path = False
                 framework_imports_for_platform = []
                 for f in framework_imports:
                     if path_for_framework in f.short_path:
-                        found_framework_path = True
+                        # found_framework_path = True
                         framework_imports_for_platform.append(f)
-                if not found_framework_path:
+                # if not found_framework_path:
                     fail("""
 ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
 """.format(xcframework_paths[platform])
                     )
                 framework_imports = framework_imports_for_platform
-                continue
                 
         if not found_platform:
             fail("""
@@ -436,7 +426,7 @@ The list of files under a .framework directory which are provided to Apple based
 on this target.
 """,
         ),
-        "xcframework_paths": attr.string_dict(
+        "xcframework_library_ids": attr.string_dict(
             doc = """
 The framework file path information for each platform. Key: platform (possible values: IOS_DEVICE,
 IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
