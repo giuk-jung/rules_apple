@@ -233,25 +233,29 @@ def _framework_search_paths(header_imports):
         return []
 
 def _framework_import_list(ctx):
-    """Return the framework imports list. In the case of xcframework, return the imports list for each architecture."""
+    """Return the framework imports list. In the case of xcframework, return the imports list for current architecture.
+    """
     
     # There's some work currently in progress to develop a rule for xcframework in rules_apple,
     # but there is no timeline. We need to track the following issue.
     # https://github.com/bazelbuild/rules_apple/issues/851
     
     framework_imports = ctx.files.framework_imports
+    xcframework_library_ids = ctx.attr.xcframework_library_ids
     
-    library_ids = ctx.attr.xcframework_library_ids
-    if library_ids:
+    if xcframework_library_ids:
         framework_basename = paths.split_extension(
-            paths.basename(framework_imports[0].dirname)
+            paths.basename(ctx.files.framework_imports[0].dirname)
         )[0]
-        library_path = framework_basename + ".framework"
         current_platform = ctx.fragments.apple.single_arch_platform
+        framework_dir = framework_basename + ".framework"
                 
-        for library_id in library_ids:
+        for library_id in xcframework_library_ids:
             if str(current_platform) == library_id:
-                path_for_framework = paths.join(library_ids[library_id], library_path)
+                path_for_framework = paths.join(
+                    xcframework_library_ids[library_id], 
+                    framework_dir
+                )
                 
                 framework_imports_for_platform = []
                 for f in framework_imports:
@@ -267,11 +271,44 @@ ERROR: Instructed to work with xcframework but couldn't find framework files und
                 
     return framework_imports
 
+
+def _dsym_import_list(ctx):
+    """Returns the dsym import list under a *.dSYM directory. For xcframework, returns the import list for the current architecture.
+    """
+    framework_imports = ctx.files.framework_imports
+    dsym_imports = ctx.files.dsym_imports
+    xcframework_library_ids = ctx.attr.xcframework_library_ids
+
+    if xcframework_library_ids:
+        framework_basename = paths.split_extension(
+            paths.basename(ctx.files.framework_imports[0].dirname)
+        )[0]
+        current_platform = ctx.fragments.apple.single_arch_platform
+        dsym_dir = framework_basename + ".framework.dSYM"
+
+        for library_id in xcframework_library_ids:
+            if str(current_platform) == library_id:
+                path_for_framework = paths.join(
+                    xcframework_library_ids[library_id], 
+                    "dSYMs", 
+                    dsym_dir
+                )
+                dsym_imports_for_platform = []
+                for f in framework_imports:
+                    if path_for_framework in f.short_path:
+                        dsym_imports_for_platform.append(f)
+
+                dsym_imports = dsym_imports_for_platform
+
+    return dsym_imports
+    
+
 def _apple_dynamic_framework_import_impl(ctx):
     """Implementation for the apple_dynamic_framework_import rule."""
     providers = []
 
     framework_imports = _framework_import_list(ctx)
+    dsym_imports = _dsym_import_list(ctx)
     bundling_imports, header_imports, module_map_imports = (
         _classify_framework_imports(ctx, framework_imports)
     )
@@ -283,7 +320,7 @@ def _apple_dynamic_framework_import_impl(ctx):
         _framework_import_info(
             transitive_sets,
             ctx.fragments.apple.single_arch_cpu,
-            ctx.files.dsym_imports,
+            dsym_imports,
         ),
     )
 
