@@ -239,71 +239,32 @@ def _framework_import_list(ctx):
     # but there is no timeline. We need to track the following issue.
     # https://github.com/bazelbuild/rules_apple/issues/851
     
-    """
-    리뷰 대응
-    Instead of the the full path, can we use the framework identifier (LibraryIdentifier in the Info.plist)?
-    I think it's safe to assume that the framework name will follow the conventional name 
-    FrameworkName.framework if we have a FrameworkName.xcframework.
-    """
-    
-    
     framework_imports = ctx.files.framework_imports
     
-    # xcframework_paths = ctx.attr.xcframework_paths
-    library_ids = ctx.attr.xcframework_library_ids # eg."IOS_SIMULATOR": "ios-x86_64-simulator",
-    # if xcframework_paths:
+    library_ids = ctx.attr.xcframework_library_ids
     if library_ids:
-        # xcframework_name = paths.basename(framework_imports[0].dirname)
-        # framework_name = paths.replace_extension(xcframework_name, "framework")
-        xcframework_basename = paths.split_extension( # eg. "AMPKit"
+        framework_basename = paths.split_extension(
             paths.basename(framework_imports[0].dirname)
         )[0]
-        framework_name = xcframework_basename + ".framework" # eg. "AMPKit.framework"
-        # found_platform = False
-        current_platform = ctx.fragments.apple.single_arch_platform # eg. IOS_SIMULATOR
-    # xcframework_paths = ctx.attr.xcframework_paths
-        
-        print("\n{framework_name}\n".format(
-            framework_name = framework_name
-        ))
-        
-        for platform in library_ids:
-            if str(current_platform) == platform:
-                # found_platform = True
-                path_for_framework = library_ids[platform] + "/" + framework_name
-                # if not found_framework_path:
-                path = ctx.path(path_for_framework)
-                print("\n{path}\n".format(
-                    path = path
-                ))
-            if not path.exists
-                fail("""
-ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
-""".format(xcframework_paths[platform])
-                )
-#                 if not path_for_framework.endswith((".framework", ".framework/")):
-#                     fail("""
-# ERROR: Instructed to work with xcframework but the given path `{}` doesn't end with `.framework`
-# """.format(path_for_framework)
-                    # )
-                # found_framework_path = False
+        library_path = framework_basename + ".framework"
+        current_platform = ctx.fragments.apple.single_arch_platform
+                
+        for library_id in library_ids:
+            if str(current_platform) == library_id:
+                path_for_framework = paths.join(library_ids[library_id], library_path)
+                
                 framework_imports_for_platform = []
                 for f in framework_imports:
                     if path_for_framework in f.short_path:
-                        # found_framework_path = True
                         framework_imports_for_platform.append(f)
-                # if not found_framework_path:
+                        
+                if not framework_imports_for_platform:
                     fail("""
 ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
-""".format(xcframework_paths[platform])
+""".format(path_for_framework)
                     )
                 framework_imports = framework_imports_for_platform
                 
-        if not found_platform:
-            fail("""
-ERROR: Instructed to work with xcframework but couldn't find framework path for platform `{}`
-""".format(str(current_platform))
-            )
     return framework_imports
 
 def _apple_dynamic_framework_import_impl(ctx):
@@ -428,11 +389,12 @@ on this target.
         ),
         "xcframework_library_ids": attr.string_dict(
             doc = """
-The framework file path information for each platform. Key: platform (possible values: IOS_DEVICE,
+The framework information for each platform. Key: platform (possible values: IOS_DEVICE,
 IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
-Value: relative path to the framework file. This is needed since we cannot read 
-*.xcframework/Info.plist during the analyzing phase. Also, this is based on the assumption that
-a framework file should be a fat binary containing all architecture for a specific platform.
+Value: The LibraryIdentifier for each platform's framework, located in *.xcframework/info.plist.
+This is needed since we cannot read *.xcframework/Info.plist during the analyzing phase. Also, 
+this is based on the assumption that a framework file should be a fat binary containing all 
+architecture for a specific platform.
 """,
         ),
         "deps": attr.label_list(
@@ -471,13 +433,14 @@ The list of files under a .framework directory which are provided to Apple based
 on this target.
 """,
         ),
-        "xcframework_paths": attr.string_dict(
+        "xcframework_library_ids": attr.string_dict(
             doc = """
-The framework file path information for each platform. Key: platform (possible values: IOS_DEVICE,
+The framework information for each platform. Key: platform (possible values: IOS_DEVICE,
 IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
-Value: relative path to the framework file. This is needed since we cannot read 
-*.xcframework/Info.plist during the analyzing phase. Also, this is based on the assumption that
-a framework file should be a fat binary containing all architecture for a specific platform.
+Value: The LibraryIdentifier for each platform's framework, located in *.xcframework/info.plist.
+This is needed since we cannot read *.xcframework/Info.plist during the analyzing phase. Also, 
+this is based on the assumption that a framework file should be a fat binary containing all 
+architecture for a specific platform.
 """,
         ),
         "sdk_dylibs": attr.string_list(
