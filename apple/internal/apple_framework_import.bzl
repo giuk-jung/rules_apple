@@ -249,11 +249,83 @@ def _framework_search_paths(header_imports):
     else:
         return []
 
+def _framework_import_list(framework_imports, library_ids, current_platform):
+    """Return the framework imports list. In the case of xcframework, return the imports list for current architecture.
+    """
+
+    # There's some work currently in progress to develop a rule for xcframework in rules_apple,
+    # but there is no timeline. We need to track the following issue.
+    # https://github.com/bazelbuild/rules_apple/issues/851
+
+    if library_ids:
+        framework_basename = paths.split_extension(
+            paths.basename(framework_imports[0].dirname)
+        )[0]
+        framework_dir = framework_basename + ".framework"
+                
+        for id in library_ids:
+            if str(current_platform) == id:
+                path_for_framework = paths.join(
+                    library_ids[id], 
+                    framework_dir
+                )
+                framework_imports_for_platform = []
+                for f in framework_imports:
+                    if path_for_framework in f.short_path:
+                        framework_imports_for_platform.append(f)
+
+                if not framework_imports_for_platform:
+                    fail("""
+ERROR: Instructed to work with xcframework but couldn't find framework files under given path `{}`
+""".format(path_for_framework)
+                    )
+                framework_imports = framework_imports_for_platform
+
+    return framework_imports
+
+
+def _dsym_import_list(dsym_imports, framework_imports, library_ids, current_platform):
+    """Returns the dsym import list under a *.dSYM directory. For xcframework, returns the import list for the current architecture.
+    """
+    if library_ids:
+        framework_basename = paths.split_extension(
+            paths.basename(framework_imports[0].dirname)
+        )[0]
+        dsym_dir = framework_basename + ".framework.dSYM"
+
+        for id in library_ids:
+            if str(current_platform) == id:
+                path_for_dsym = paths.join(
+                    library_ids[id],
+                    "dSYMs",
+                    dsym_dir
+                )
+                dsym_imports_for_platform = []
+                for f in framework_imports:
+                    if path_for_dsym in f.short_path:
+                        dsym_imports_for_platform.append(f)
+
+                dsym_imports = dsym_imports_for_platform
+
+    return dsym_imports
+
+
 def _apple_dynamic_framework_import_impl(ctx):
     """Implementation for the apple_dynamic_framework_import rule."""
     providers = []
 
-    framework_imports = ctx.files.framework_imports
+    framework_imports = _framework_import_list(
+        ctx.files.framework_imports,
+        ctx.attr.xcframework_library_ids,
+        ctx.fragments.apple.single_arch_platform
+    )
+    dsym_imports = _dsym_import_list(
+        ctx.files.dsym_imports,
+        ctx.files.framework_imports,
+        ctx.attr.xcframework_library_ids,
+        ctx.fragments.apple.single_arch_platform
+    )
+
     bundling_imports, header_imports, module_map_imports = (
         _classify_framework_imports(ctx.var, framework_imports)
     )
@@ -265,7 +337,7 @@ def _apple_dynamic_framework_import_impl(ctx):
         _framework_import_info(
             transitive_sets,
             ctx.fragments.apple.single_arch_cpu,
-            ctx.files.dsym_imports,
+            dsym_imports,
         ),
     )
 
@@ -294,7 +366,11 @@ def _apple_static_framework_import_impl(ctx):
     """Implementation for the apple_static_framework_import rule."""
     providers = []
 
-    framework_imports = ctx.files.framework_imports
+    framework_imports = _framework_import_list(
+        ctx.files.framework_imports,
+        ctx.attr.xcframework_library_ids,
+        ctx.fragments.apple.single_arch_platform
+    )
     _, header_imports, module_map_imports = _classify_framework_imports(ctx.var, framework_imports)
 
     transitive_sets = _transitive_framework_imports(ctx.attr.deps)
@@ -369,6 +445,16 @@ The list of files under a .framework directory which are provided to Apple based
 on this target.
 """,
         ),
+        "xcframework_library_ids": attr.string_dict(
+            doc = """
+The framework information for each platform. Key: platform (possible values: IOS_DEVICE,
+IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
+Value: The LibraryIdentifier for each platform's framework, located in *.xcframework/Info.plist.
+This is needed since we cannot read *.xcframework/Info.plist during the analysis phase. Also,
+this is based on the assumption that a framework file should be a fat binary containing all
+architecture for a specific platform.
+""",
+        ),
         "deps": attr.label_list(
             doc = """
 A list of targets that are dependencies of the target being built, which will be linked into that
@@ -410,6 +496,16 @@ apple_static_framework_import = rule(
             doc = """
 The list of files under a .framework directory which are provided to Apple based targets that depend
 on this target.
+""",
+        ),
+        "xcframework_library_ids": attr.string_dict(
+            doc = """
+The framework information for each platform. Key: platform (possible values: IOS_DEVICE,
+IOS_SIMULATOR, MACOS, TVOS_DEVICE, TVOS_SIMULATOR, WATCHOS_DEVICE, WATCHOS_SIMULATOR, CATALYST).
+Value: The LibraryIdentifier for each platform's framework, located in *.xcframework/Info.plist.
+This is needed since we cannot read *.xcframework/Info.plist during the analysis phase. Also,
+this is based on the assumption that a framework file should be a fat binary containing all
+architecture for a specific platform.
 """,
         ),
         "sdk_dylibs": attr.string_list(

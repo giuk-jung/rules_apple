@@ -49,6 +49,7 @@ def compile_datamodels(
 
     args = [
         "momc",
+        "--no-inverse-relationship-warnings",
         deployment_target_option,
         platform_prerequisites.minimum_os,
         "--module",
