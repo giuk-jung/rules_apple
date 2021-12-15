@@ -1202,6 +1202,16 @@ def _create_apple_bundling_rule(
     elif platform_type == "watchos":
         rule_attrs.extend(_get_watchos_attrs(rule_descriptor))
 
+        # Workaround for specifying codesignopts for watch apps (not enabled because of requires_deps = False).
+        # (This option should normally not be in _common_binary_linking_attrs...)
+        if product_type == apple_product_type.watch2_application:
+            rule_attrs.append({
+                "codesignopts": attr.string_list(doc = """
+A list of strings representing extra flags that should be passed to `codesign`.
+""",
+                ),
+            })
+ 
     rule_attrs.append({
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
